@@ -26,6 +26,7 @@ endif
 
 prefix = /usr/local
 bindir = bin
+mandir = share/man/man1
 
 
 CC = cc
@@ -44,8 +45,12 @@ clean:
 
 install: $(EXEC)
 	$(INSTALL) $(EXEC) $(prefix)/$(bindir)/
+	$(INSTALL) clinfo.1 $(prefix)/$(mandir)/$(EXEC).1
 
 uninstall:
 	@test -s $(prefix)/$(bindir)/$(EXEC) \
 	|| { echo "Not found: $(prefix)/$(bindir)/$(EXEC)"; exit 1; }
 	$(RM) $(prefix)/$(bindir)/$(EXEC)
+	@test -s $(prefix)/$(mandir)/$(EXEC).1 \
+	|| { echo "Not found: $(prefix)/$(mandir)/$(EXEC).1"; exit 1; }
+	$(RM) $(prefix)/$(mandir)/$(EXEC).1

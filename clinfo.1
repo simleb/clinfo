@@ -1,0 +1,72 @@
+.\" Copyright (c) 2013 Simon Leblanc
+.\"
+.\" This program is free software: you can redistribute it and/or modify
+.\" it under the terms of the GNU General Public License as published by
+.\" the Free Software Foundation, either version 3 of the License, or
+.\" (at your option) any later version.
+.\"
+.\" This program is distributed in the hope that it will be useful,
+.\" but WITHOUT ANY WARRANTY; without even the implied warranty of
+.\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+.\" GNU General Public License for more details.
+.\"
+.\" You should have received a copy of the GNU General Public License
+.\" along with this program.  If not, see <http://www.gnu.org/licenses/>.
+.\"
+.Dd June 21, 2013
+.Dt CLINFO 1
+.Os Darwin
+.Sh NAME
+.Nm clinfo
+.Nd query OpenCL parameters
+.Sh SYNOPSIS
+.Nm
+.Op Fl ahlr
+.Op Ar platform Ns Op : Ns Ar device
+.Op Ar CL_PARAMETER ...
+.Sh DESCRIPTION
+.Nm
+displays the OpenCL 1.1 parameters in a human readable form.
+.Pp
+By default,
+.Nm
+only displays a few basic parameters. You can print them all with
+.Fl a
+(or
+.Fl -all Ns
+).
+You can also query specific parameters by listing them as arguments.
+For instance use
+.Ic clinfo CL_DEVICE_TYPE
+to query the device type of each device for each platform.
+.Pp
+You can restrict the output to a single platform and even to a single device.
+For instance use
+.Ic clinfo 0:1
+to restrict the output to device #1 of platform #0.
+To find out what is the number of a platform or a device, you can use
+.Fl l
+(or
+.Fl -list Ns
+).
+.Pp
+The following options are available:
+.Bl -tag width
+.It Fl a -all
+Display all parameters.
+.It Fl h -help
+Display a short help notice.
+.It Fl l -list
+List platforms and devices.
+.It Fl r -raw
+Raw output (by default the values are pretty-printed).
+.El
+.Pp
+.Sh SEE ALSO
+OpenCL 1.1 Reference Pages:
+.Ar http://www.khronos.org/registry/cl/sdk/1.1/docs/man/xhtml/
+.Sh AUTHORS
+Simon Leblanc
+.Sh BUGS
+See Issues on Github:
+.Ar https://github.com/simleb/clinfo/issues

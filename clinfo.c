@@ -18,84 +18,583 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include <math.h>
-#include <OpenCL/cl.h>
+
+#ifdef __APPLE__
+	#include <OpenCL/cl.h>
+#else
+	#include <CL/cl.h>
+#endif
+
+#ifdef NOBOLD
+	#define BOLD ""
+	#define NORMAL ""
+#else
+	#define BOLD "\x1b[1m"
+	#define NORMAL "\x1b[0m"
+#endif
+
+#define LENGTH(array) (sizeof(array) / sizeof(array[0]))
 
 
-#define assert(assertion, ...) if (!(assertion)) { \
-    fprintf(stderr, "Fatal: " __VA_ARGS__); \
-    putc('\n', stderr); \
-    exit(EXIT_FAILURE); \
-}
+/*****************************************************************************\
+▏ Constants                                                                   ▕
+\*****************************************************************************/
 
 const size_t indent_size = 2;
 const size_t column_size = 40;
 
 
-#define printHeader(indent, format, ...) do { \
-    for (size_t n = 0; n < (indent) * indent_size; ++n) putchar(' '); \
-    printf("\x1b[1m" format ":\x1b[0m\n\n", __VA_ARGS__); \
-} while(0)
+/*****************************************************************************\
+▏ Types                                                                       ▕
+\*****************************************************************************/
+
+typedef void (*Printer)(size_t indent, const char* key, const char* value);
+
+typedef void (*Formatter)(size_t indent, const char* key, void* value, size_t size, Printer print);
+
+typedef enum { BASIC, ADVANCED } Level;
+
+typedef enum { PRETTY, RAW } Style;
+
+typedef struct ParameterList {
+	const char* name;
+	struct ParameterList* next;
+} ParameterList;
+
+typedef struct {
+	cl_platform_info id;
+	const char* raw_name;
+	const char* pretty_name;
+	Formatter rawPrint;
+	Formatter prettyPrint;
+	Level level;
+} PlatformParameter;
+
+typedef struct {
+	cl_device_info id;
+	const char* raw_name;
+	const char* pretty_name;
+	Formatter rawPrint;
+	Formatter prettyPrint;
+	Level level;
+} DeviceParameter;
 
 
-void print(size_t indent, const char* key, const char* value)
+/*****************************************************************************\
+▏ Printers and formatters prototypes                                          ▕
+\*****************************************************************************/
+
+void printValue(size_t indent, const char* key, const char* value);
+void printWithKey(size_t indent, const char* key, const char* value);
+
+void printExecutionCapabilities(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printLocalMemType(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printQueueProperties(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printFPConfig(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printExtensions(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printDimensions(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printMemSize(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printSize(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printUlong(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printUint(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printBool(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printDeviceType(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printStringValue(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printString(size_t indent, const char* key, void* value, size_t size, Printer print);
+
+
+/*****************************************************************************\
+▏ List of parameters                                                          ▕
+\*****************************************************************************/
+
+PlatformParameter platform_parameters[] = {
+	{ CL_PLATFORM_NAME, "CL_PLATFORM_NAME", "Name", printString, printString, BASIC },
+	{ CL_PLATFORM_VENDOR, "CL_PLATFORM_VENDOR", "Vendor", printString, printString, ADVANCED },
+	{ CL_PLATFORM_VERSION, "CL_PLATFORM_VERSION", "Version", printString, printString, BASIC },
+	{ CL_PLATFORM_PROFILE, "CL_PLATFORM_PROFILE", "Profile", printString, printString, ADVANCED },
+	{ CL_PLATFORM_EXTENSIONS, "CL_PLATFORM_EXTENSIONS", "Extensions", printString, printExtensions, ADVANCED }
+};
+
+DeviceParameter device_parameters[] = {
+	// General
+	{ CL_DEVICE_NAME, "CL_DEVICE_NAME", "Name", printString, printString, BASIC },
+	{ CL_DEVICE_TYPE, "CL_DEVICE_TYPE", "Type", printDeviceType, printDeviceType, BASIC },
+	{ CL_DEVICE_VENDOR, "CL_DEVICE_VENDOR", "Vendor", printString, printString, ADVANCED },
+	{ CL_DEVICE_VENDOR_ID, "CL_DEVICE_VENDOR_ID", "Vendor ID", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PROFILE, "CL_DEVICE_PROFILE", "Profile", printString, printString, ADVANCED },
+	{ CL_DEVICE_AVAILABLE, "CL_DEVICE_AVAILABLE", "Available", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_VERSION, "CL_DEVICE_VERSION", "Version", printString, printString, BASIC },
+	{ CL_DRIVER_VERSION, "CL_DRIVER_VERSION", "Driver version", printString, printString, ADVANCED },
+
+	// Compiler
+	{ CL_DEVICE_COMPILER_AVAILABLE, "CL_DEVICE_COMPILER_AVAILABLE", "Compiler available", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_OPENCL_C_VERSION, "CL_DEVICE_OPENCL_C_VERSION", "OpenCL C version", printString, printString, ADVANCED },
+
+	// Misc
+	{ CL_DEVICE_ADDRESS_BITS, "CL_DEVICE_ADDRESS_BITS", "Address space size", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_ENDIAN_LITTLE, "CL_DEVICE_ENDIAN_LITTLE", "Little endian", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_ERROR_CORRECTION_SUPPORT, "CL_DEVICE_ERROR_CORRECTION_SUPPORT", "Error correction support", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_HOST_UNIFIED_MEMORY, "CL_DEVICE_HOST_UNIFIED_MEMORY", "Unified memory", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_MEM_BASE_ADDR_ALIGN, "CL_DEVICE_MEM_BASE_ADDR_ALIGN", "Address alignment (bits)", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, "CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE", "Smallest alignment (bytes)", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PROFILING_TIMER_RESOLUTION, "CL_DEVICE_PROFILING_TIMER_RESOLUTION", "Resolution of timer (ns)", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_MAX_CLOCK_FREQUENCY, "CL_DEVICE_MAX_CLOCK_FREQUENCY", "Max clock frequency (MHz)", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_COMPUTE_UNITS, "CL_DEVICE_MAX_COMPUTE_UNITS", "Max compute units", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_CONSTANT_ARGS, "CL_DEVICE_MAX_CONSTANT_ARGS", "Max constant args", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE", "Max constant buffer size", printUlong, printMemSize, ADVANCED },
+	{ CL_DEVICE_MAX_MEM_ALLOC_SIZE, "CL_DEVICE_MAX_MEM_ALLOC_SIZE", "Max mem alloc size", printUlong, printMemSize, ADVANCED },
+	{ CL_DEVICE_MAX_PARAMETER_SIZE, "CL_DEVICE_MAX_PARAMETER_SIZE", "Max parameter size", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_QUEUE_PROPERTIES, "CL_DEVICE_QUEUE_PROPERTIES", "Command-queue supported props", printQueueProperties, printQueueProperties, ADVANCED },
+	{ CL_DEVICE_EXECUTION_CAPABILITIES, "CL_DEVICE_EXECUTION_CAPABILITIES", "Execution capabilities", printExecutionCapabilities, printExecutionCapabilities, ADVANCED },
+
+	// Memory
+	{ CL_DEVICE_GLOBAL_MEM_SIZE, "CL_DEVICE_GLOBAL_MEM_SIZE", "Global memory size", printUlong, printMemSize, BASIC },
+	{ CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, "CL_DEVICE_GLOBAL_MEM_CACHE_SIZE", "Global memory cache size", printUlong, printMemSize, ADVANCED },
+	{ CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, "CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE", "Global memory line cache size", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_LOCAL_MEM_SIZE, "CL_DEVICE_LOCAL_MEM_SIZE", "Local memory size", printUlong, printMemSize, BASIC },
+	{ CL_DEVICE_LOCAL_MEM_TYPE, "CL_DEVICE_LOCAL_MEM_TYPE", "Local memory type", printLocalMemType, printLocalMemType, ADVANCED },
+	{ CL_DEVICE_GLOBAL_MEM_CACHE_TYPE, "CL_DEVICE_GLOBAL_MEM_CACHE_TYPE", "Global memory cache type", printGlobalMemCacheType, printGlobalMemCacheType, ADVANCED },
+
+	// Work group
+	{ CL_DEVICE_MAX_WORK_GROUP_SIZE, "CL_DEVICE_MAX_WORK_GROUP_SIZE", "Max work group size", printSize, printSize, BASIC },
+	{ CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, "CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS", "Max work item dimensions", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_WORK_ITEM_SIZES, "CL_DEVICE_MAX_WORK_ITEM_SIZES", "Max work item sizes", printDimensions, printDimensions, BASIC },
+
+	// Images
+	{ CL_DEVICE_IMAGE_SUPPORT, "CL_DEVICE_IMAGE_SUPPORT", "Image support", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_IMAGE2D_MAX_HEIGHT, "CL_DEVICE_IMAGE2D_MAX_HEIGHT", "Max 2D image height", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_IMAGE2D_MAX_WIDTH, "CL_DEVICE_IMAGE2D_MAX_WIDTH", "Max 2D image width", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_IMAGE3D_MAX_DEPTH, "CL_DEVICE_IMAGE3D_MAX_DEPTH", "Max 3D image depth", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_IMAGE3D_MAX_HEIGHT, "CL_DEVICE_IMAGE3D_MAX_HEIGHT", "Max 3D image height", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_IMAGE3D_MAX_WIDTH, "CL_DEVICE_IMAGE3D_MAX_WIDTH", "Max 3D image width", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_MAX_READ_IMAGE_ARGS, "CL_DEVICE_MAX_READ_IMAGE_ARGS", "Max read image args", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_WRITE_IMAGE_ARGS, "CL_DEVICE_MAX_WRITE_IMAGE_ARGS", "Max write image args", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_MAX_SAMPLERS, "CL_DEVICE_MAX_SAMPLERS", "Max samplers", printUint, printUint, ADVANCED },
+
+	// Vectors
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_CHAR, "CL_DEVICE_NATIVE_VECTOR_WIDTH_CHAR", "Native vector width char", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT", "Native vector width short", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_INT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_INT", "Native vector width int", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_LONG, "CL_DEVICE_NATIVE_VECTOR_WIDTH_LONG", "Native vector width long", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF, "CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF", "Native vector width half", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT", "Native vector width float", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE, "CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE", "Native vector width double", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR", "Preferred vector width char", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT", "Preferred vector width short", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", "Preferred vector width int", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG", "Preferred vector width long", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF", "Preferred vector width half", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT", "Preferred vector width float", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE", "Preferred vector width double", printUint, printUint, ADVANCED },
+
+	// Floating-points
+#ifdef CL_DEVICE_HALF_FP_CONFIG
+	{ CL_DEVICE_HALF_FP_CONFIG, "CL_DEVICE_HALF_FP_CONFIG", "Half precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+#endif
+	{ CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG", "Single precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+	{ CL_DEVICE_DOUBLE_FP_CONFIG, "CL_DEVICE_DOUBLE_FP_CONFIG", "Double precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+
+	// Extensions
+	{ CL_DEVICE_EXTENSIONS, "CL_DEVICE_EXTENSIONS", "Extensions", printString, printExtensions, ADVANCED },
+};
+
+
+/*****************************************************************************\
+▏ Main helpers                                                                ▕
+\*****************************************************************************/
+
+void printHelp(const char* argv0)
 {
-    size_t n;
-    for (n = 0; n < indent * indent_size; ++n)
-    {
-        putchar(' ');
-    }
-    for (n += key ? printf("%s:", key) : 0; n < column_size; ++n)
-    {
-        putchar(' ');
-    }
-    printf(" %s\n", value);
+	printf("Usage: %s [-ahlr] [platform[:device]] [CL_PARAMETER ...]\n", argv0);
+	printf("\n");
+	printf("Options:\n");
+	printf("  -a --all    Display all parameters.\n");
+    printf("  -h --help   Display this help notice.\n");
+    printf("  -l --list   List platforms and devices.\n");
+    printf("  -r --raw    Raw output (by default the values are pretty-printed).\n");
+}
+
+void parseOptions(int argc, char* argv[], Level* level, Style* style, long* platform, long* device, int* list, ParameterList** queries)
+{
+	for (int i = 1; i < argc; ++i)
+	{
+		const char c = argv[i][0];
+		if (c == '-')
+		{
+			for (const char *l = &argv[i][1]; *l != '\0'; ++l)
+			{
+				switch (*l)
+				{
+				  case 'a':
+					*level = ADVANCED;
+					break;
+				  case 'h':
+					printHelp(argv[0]);
+					exit(0);
+				  case 'l':
+					*list = 1;
+					return;
+				  case 'r':
+					*style = RAW;
+					break;
+				  case '-':
+					if (strcmp(++l, "all") == 0)
+					{
+						*level = ADVANCED;
+						l += 2;
+					}
+					else if (strcmp(l, "help") == 0)
+					{
+						printHelp(argv[0]);
+						exit(0);
+					}
+					else if (strcmp(l, "list") == 0)
+					{
+						*list = 1;
+						return;
+					}
+					else if (strcmp(l, "raw") == 0)
+					{
+						*style = RAW;
+						l += 2;
+					}
+					else
+					{
+						fprintf(stderr, "%s: '--%s' is not a valid option. See '%s -h'.\n", argv[0], l, argv[0]);
+						exit(EXIT_FAILURE);
+					}
+					break;
+				  default:
+					fprintf(stderr, "%s: '-%c' is not a valid option. See '%s -h'.\n", argv[0], *l, argv[0]);
+					exit(EXIT_FAILURE);
+				}
+			}
+		}
+		else if (isdigit(c))
+		{
+			char *p;
+			*platform = strtol(argv[i], &p, 10);
+			if (*p == ':' && isdigit(*++p))
+			{
+				*device = strtol(p, &p, 10);
+			}
+			else if (*p != '\0')
+			{
+				fprintf(stderr, "%s: '%s' is not a valid option. See '%s -h'.\n", argv[0], argv[i], argv[0]);
+				exit(EXIT_FAILURE);
+			}
+		}
+		else if (c == 'C')
+		{
+			int found = 0;
+			for (size_t j = 0; j < LENGTH(platform_parameters); ++j)
+			{
+				if (strcmp(argv[i], platform_parameters[j].raw_name) == 0)
+				{
+					ParameterList* v = malloc(sizeof(ParameterList));
+					v->name = argv[i];
+					v->next = *queries;
+					*queries = v;
+					++found;
+				}
+			}
+			for (size_t j = 0; j < LENGTH(device_parameters); ++j)
+			{
+				if (strcmp(argv[i], device_parameters[j].raw_name) == 0)
+				{
+					ParameterList* v = malloc(sizeof(ParameterList));
+					v->name = argv[i];
+					v->next = *queries;
+					*queries = v;
+					++found;
+				}
+			}
+			if (!found)
+			{
+				fprintf(stderr, "%s: '%s' is not a valid option. See '%s -h'.\n", argv[0], argv[i], argv[0]);
+				exit(EXIT_FAILURE);
+			}
+		}
+		else
+		{
+			fprintf(stderr, "%s: '%s' is not a valid option. See '%s -h'.\n", argv[0], argv[i], argv[0]);
+			exit(EXIT_FAILURE);
+		}
+	}
+}
+
+int shouldDisplay(const char* name, ParameterList* queries)
+{
+	for (; queries; queries = queries->next)
+	{
+		if (strcmp(name, queries->name) == 0)
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+void printPlatformInfo(const char* argv0, cl_platform_id platform, cl_platform_info param, const char* name, size_t indent, Formatter format, Printer print)
+{
+	size_t buffer_size;
+	cl_int status = clGetPlatformInfo(platform, param, 0, NULL, &buffer_size);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the size of the '%s' platform parameter.", name, argv0);
+		exit(EXIT_FAILURE);
+	}
+
+	char* buffer = malloc(buffer_size);
+	status = clGetPlatformInfo(platform, param, buffer_size, buffer, NULL);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the '%s' platform parameter.", name, argv0);
+		exit(EXIT_FAILURE);
+	}
+
+	format(indent, name, buffer, buffer_size, print);
+
+	free(buffer);
+}
+
+void printDeviceInfo(const char* argv0, cl_device_id device, cl_device_info param, const char* name, size_t indent, Formatter format, Printer print)
+{
+	size_t buffer_size;
+	cl_int status = clGetDeviceInfo(device, param, 0, NULL, &buffer_size);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the size of the '%s' device parameter.", name, argv0);
+		exit(EXIT_FAILURE);
+	}
+
+	char* buffer = malloc(buffer_size);
+	status = clGetDeviceInfo(device, param, buffer_size, buffer, NULL);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the '%s' device parameter.", name, argv0);
+		exit(EXIT_FAILURE);
+	}
+
+	format(indent, name, buffer, buffer_size, print);
+
+	free(buffer);
 }
 
 
-typedef void (*Action)(size_t indent, const char* name, void* value, size_t size);
+/*****************************************************************************\
+▏ Main                                                                        ▕
+\*****************************************************************************/
 
-
-void printPlatformInfo(cl_platform_id platform, cl_platform_info param, const char* name, size_t indent, Action action)
+int main (int argc, char* argv[])
 {
-    size_t buffer_size;
-    cl_int status = clGetPlatformInfo(platform, param, 0, NULL, &buffer_size);
-    assert(status == CL_SUCCESS, "Cannot get the size of the '%s' platform parameter.", name);
-    
-    char* buffer = malloc(buffer_size);
-    status = clGetPlatformInfo(platform, param, buffer_size, buffer, NULL);
-    assert(status == CL_SUCCESS, "Cannot get the '%s' platform parameter.", name);
-    
-    action(indent, name, buffer, buffer_size);
-    
-    free(buffer);
+	Level level = BASIC;
+	Style style = PRETTY;
+	long specific_platform = -1;
+	long specific_device = -1;
+	int list = 0;
+	ParameterList* queries = NULL;
+
+	parseOptions(argc, argv, &level, &style, &specific_platform, &specific_device, &list, &queries);
+
+	cl_int status;
+
+	cl_uint num_platforms;
+	status = clGetPlatformIDs(0, NULL, &num_platforms);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the number of OpenCL platforms available.", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	if (specific_platform >= num_platforms)
+	{
+		fprintf(stderr, "%s: platform #%ld does not exist.\n", argv[0], specific_platform);
+		exit(EXIT_FAILURE);
+	}
+
+	cl_platform_id platforms[num_platforms];
+	status = clGetPlatformIDs(num_platforms, platforms, NULL);
+	if (status != CL_SUCCESS)
+	{
+		fprintf(stderr, "%s: Cannot get the list of OpenCL platforms.", argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	size_t indent = 0;
+	for (size_t i = 0; i < num_platforms; ++i)
+	{
+		if (specific_platform > -1 && i != specific_platform) continue;
+
+		if (list)
+		{
+			if (style == RAW)
+			{
+				printf("%zu", i);
+			}
+			else
+			{
+				printf(BOLD "Platform #%zu:" NORMAL, i);
+			}
+			printPlatformInfo(argv[0], platforms[i], CL_PLATFORM_NAME, "Name", 0, printString, printValue);
+			putchar('\n');
+		}
+		else
+		{
+			if (style == PRETTY)
+			{
+				for (size_t n = 0; n < indent * indent_size; ++n) putchar(' ');
+				printf(BOLD "Platform #%zu" NORMAL "\n", i);
+				++indent;
+			}
+
+			for (size_t k = 0; k < LENGTH(platform_parameters); ++k)
+			{
+				const PlatformParameter p = platform_parameters[k];
+				if ((queries == NULL && p.level <= level) || shouldDisplay(p.raw_name, queries))
+				{
+					if (style == PRETTY)
+					{
+						printPlatformInfo(argv[0], platforms[i], p.id, p.pretty_name, indent, p.prettyPrint, printWithKey);
+					}
+					else
+					{
+						printf("%zu %s", i, p.raw_name);
+						printPlatformInfo(argv[0], platforms[i], p.id, p.raw_name, 0, p.rawPrint, printValue);
+						putchar('\n');
+					}
+				}
+			}
+
+			if (style == PRETTY) putchar('\n');
+		}
+
+		cl_uint num_devices;
+		status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+		if (status != CL_SUCCESS)
+		{
+			fprintf(stderr, "%s: Cannot get the number of OpenCL devices available on this platform.", argv[0]);
+			exit(EXIT_FAILURE);
+		}
+
+		if (specific_device >= num_devices)
+		{
+			fprintf(stderr, "%s: device #%ld of platform #%ld does not exist.\n", argv[0], specific_device, specific_platform);
+			exit(EXIT_FAILURE);
+		}
+
+		cl_device_id devices[num_devices];
+		status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
+		if (status != CL_SUCCESS)
+		{
+			fprintf(stderr, "%s: Cannot get the list of OpenCL devices.", argv[0]);
+			exit(EXIT_FAILURE);
+		}
+
+		for (size_t j = 0; j < num_devices; ++j)
+		{
+			if (specific_device > -1 && j != specific_device) continue;
+
+			if (list)
+			{
+				if (style == RAW)
+				{
+					printf("%zu:%zu", i, j);
+				}
+				else
+				{
+					printf("%s── " BOLD "Device #%zu:" NORMAL, j+1 < num_devices ? "├" : "└", j);
+				}
+				printDeviceInfo(argv[0], devices[j], CL_DEVICE_NAME, "Name", 0, printString, printValue);
+				putchar('\n');
+			}
+			else
+			{
+				if (style == PRETTY)
+				{
+					for (size_t n = 0; n < indent * indent_size; ++n) putchar(' ');
+					printf(BOLD "Device #%zu" NORMAL "\n", j);
+					++indent;
+				}
+
+				for (size_t k = 0; k < LENGTH(device_parameters); ++k)
+				{
+					const DeviceParameter p = device_parameters[k];
+					if ((queries == NULL && p.level <= level) || shouldDisplay(p.raw_name, queries))
+					{
+						if (style == PRETTY)
+						{
+							printDeviceInfo(argv[0], devices[j], p.id, p.pretty_name, indent, p.prettyPrint, printWithKey);
+						}
+						else
+						{
+							printf("%zu:%zu %s", i, j, p.raw_name);
+							printDeviceInfo(argv[0], devices[j], p.id, p.raw_name, 0, p.rawPrint, printValue);
+							putchar('\n');
+						}
+					}
+				}
+
+				if (style == PRETTY)
+				{
+					putchar('\n');
+					--indent;
+				}
+			}
+		}
+		if (style == PRETTY) --indent;
+	}
+
+	while (queries)
+	{
+		ParameterList* query = queries;
+		queries = queries->next;
+		free(query);
+	}
+
+	return EXIT_SUCCESS;
 }
 
 
-void printDeviceInfo(cl_device_id device, cl_device_info param, const char* name, size_t indent, Action action)
+
+/*****************************************************************************\
+▏ Printers                                                                    ▕
+\*****************************************************************************/
+
+void printValue(size_t indent, const char* key, const char* value)
 {
-    size_t buffer_size;
-    cl_int status = clGetDeviceInfo(device, param, 0, NULL, &buffer_size);
-    assert(status == CL_SUCCESS, "Cannot get the size of the '%s' device parameter.", name);
-    
-    char* buffer = malloc(buffer_size);
-    status = clGetDeviceInfo(device, param, buffer_size, buffer, NULL);
-    assert(status == CL_SUCCESS, "Cannot get the '%s' device parameter.", name);
-    
-    action(indent, name, buffer, buffer_size);
-    
-    free(buffer);
+	printf(" %s", value);
+}
+
+void printWithKey(size_t indent, const char* key, const char* value)
+{
+	size_t n;
+	for (n = 0; n < indent * indent_size; ++n) putchar(' ');
+	for (n += key ? printf("%s:", key) : 0; n < column_size; ++n) putchar(' ');
+	printf(" %s\n", value);
 }
 
 
-void printString(size_t indent, const char* key, void* value, size_t size)
+/*****************************************************************************\
+▏ Formatters                                                                  ▕
+\*****************************************************************************/
+
+void printString(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    print(indent, key, value);
+	print(indent, key, value);
 }
 
-void printDeviceType(size_t indent, const char* key, void* value, size_t size)
+void printStringValue(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_device_type type = *((cl_device_type*)value);
+	printf("%s\n", value);
+}
+
+void printDeviceType(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	const cl_device_type type = *((cl_device_type*)value);
 	struct { cl_device_type type; const char* name; } list[] = {
 		{ CL_DEVICE_TYPE_CPU, "CPU"},
 		{ CL_DEVICE_TYPE_GPU, "GPU"},
@@ -121,60 +620,60 @@ void printDeviceType(size_t indent, const char* key, void* value, size_t size)
 	}
 }
 
-void printBool(size_t indent, const char* key, void* value, size_t size)
+void printBool(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    if (*((cl_bool*)value))
-        print(indent, key, "Yes");
-    else
-        print(indent, key, "No");
+	if (*((cl_bool*)value))
+		print(indent, key, "Yes");
+	else
+		print(indent, key, "No");
 }
 
-void printUint(size_t indent, const char* key, void* value, size_t size)
+void printUint(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_uint num = *((cl_uint*)value);
-    char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
-    sprintf(buffer, "%u", num);
-    print(indent, key, buffer);
+	const cl_uint num = *((cl_uint*)value);
+	char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
+	sprintf(buffer, "%u", num);
+	print(indent, key, buffer);
 }
 
-void printUlong(size_t indent, const char* key, void* value, size_t size)
+void printUlong(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_ulong num = *((cl_ulong*)value);
-    char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
-    sprintf(buffer, "%llu", num);
-    print(indent, key, buffer);
+	const cl_ulong num = *((cl_ulong*)value);
+	char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
+	sprintf(buffer, "%llu", num);
+	print(indent, key, buffer);
 }
 
-void printSize(size_t indent, const char* key, void* value, size_t size)
+void printSize(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const size_t num = *((size_t*)value);
-    char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
-    sprintf(buffer, "%zu", num);
-    print(indent, key, buffer);
+	const size_t num = *((size_t*)value);
+	char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
+	sprintf(buffer, "%zu", num);
+	print(indent, key, buffer);
 }
 
-void printMemSize(size_t indent, const char* key, void* value, size_t size)
+void printMemSize(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_ulong mem_size = *((cl_ulong*)value);
-    if (mem_size == 0)
-    {
-        print(indent, key, "0 B");
-        return;
-    }
-    char buffer[((mem_size >> 40) > 0 ? lrint(log10(mem_size >> 40)) + 1 : 1) + 38];
-    int num, n = 0;
-    if ((num = mem_size >> 40)) n += sprintf(&buffer[n], "%d TB ", num);
-    if ((num = mem_size >> 30 & 1023)) n += sprintf(&buffer[n], "%d GB ", num);
-    if ((num = mem_size >> 20 & 1023)) n += sprintf(&buffer[n], "%d MB ", num);
-    if ((num = mem_size >> 10 & 1023)) n += sprintf(&buffer[n], "%d kB ", num);
-    if ((num = mem_size & 1023)) n+= sprintf(&buffer[n], "%d B", num);
-    print(indent, key, buffer);
+	const cl_ulong mem_size = *((cl_ulong*)value);
+	if (mem_size == 0)
+	{
+		print(indent, key, "0 B");
+		return;
+	}
+	char buffer[((mem_size >> 40) > 0 ? lrint(log10(mem_size >> 40)) + 1 : 1) + 38];
+	int num, n = 0;
+	if ((num = mem_size >> 40)) n += sprintf(&buffer[n], "%d TB ", num);
+	if ((num = mem_size >> 30 & 1023)) n += sprintf(&buffer[n], "%d GB ", num);
+	if ((num = mem_size >> 20 & 1023)) n += sprintf(&buffer[n], "%d MB ", num);
+	if ((num = mem_size >> 10 & 1023)) n += sprintf(&buffer[n], "%d kB ", num);
+	if ((num = mem_size & 1023)) n+= sprintf(&buffer[n], "%d B", num);
+	print(indent, key, buffer);
 }
 
-void printDimensions(size_t indent, const char* key, void* value, size_t size)
+void printDimensions(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const size_t ndims = size / sizeof(size_t);
-    const size_t *dims = *((size_t(*)[])value);
+	const size_t ndims = size / sizeof(size_t);
+	const size_t *dims = *((size_t(*)[])value);
 	size_t buffer_size = 1;
 	for (size_t i = 0; i < ndims; ++i)
 	{
@@ -199,19 +698,19 @@ void printDimensions(size_t indent, const char* key, void* value, size_t size)
 	print(indent, key, buffer);
 }
 
-void printExtensions(size_t indent, const char* key, void* value, size_t size)
+void printExtensions(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    char* item = strtok(value, " ");
-    print(indent, key, item);
-    while ((item = strtok(NULL, " ")))
-    {
-        print(indent, NULL, item);
-    }
+	char* item = strtok(value, " ");
+	print(indent, key, item);
+	while ((item = strtok(NULL, " ")))
+	{
+		print(indent, NULL, item);
+	}
 }
 
-void printFPConfig(size_t indent, const char* key, void* value, size_t size)
+void printFPConfig(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_device_fp_config config = *((cl_device_type*)value);
+	const cl_device_fp_config config = *((cl_device_type*)value);
 	struct { cl_device_fp_config flag; const char* name; } list[] = {
 		{ CL_FP_DENORM, "Denorms" },
 		{ CL_FP_INF_NAN, "Inf and NaNs" },
@@ -235,9 +734,9 @@ void printFPConfig(size_t indent, const char* key, void* value, size_t size)
 	}
 }
 
-void printQueueProperties(size_t indent, const char* key, void* value, size_t size)
+void printQueueProperties(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_command_queue_properties props = *((cl_command_queue_properties*)value);
+	const cl_command_queue_properties props = *((cl_command_queue_properties*)value);
 	struct { cl_command_queue_properties flag; const char* name; } list[] = {
 		{ CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, "Out of order execution" },
 		{ CL_QUEUE_PROFILING_ENABLE, "Profiling" }
@@ -256,17 +755,17 @@ void printQueueProperties(size_t indent, const char* key, void* value, size_t si
 	}
 }
 
-void printLocalMemType(size_t indent, const char* key, void* value, size_t size)
+void printLocalMemType(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    if (*((cl_device_local_mem_type*)value) == CL_LOCAL)
-        print(indent, key, "Local");
-    else
-        print(indent, key, "Global");
+	if (*((cl_device_local_mem_type*)value) == CL_LOCAL)
+		print(indent, key, "Local");
+	else
+		print(indent, key, "Global");
 }
 
-void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t size)
+void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    switch (*((cl_device_mem_cache_type*)value))
+	switch (*((cl_device_mem_cache_type*)value))
 	{
 	case CL_NONE:
 		print(indent, key, "None");
@@ -278,13 +777,13 @@ void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t
 		print(indent, key, "Read write");
 		break;
 	default:
-        print(indent, key, "Unknown");
+		print(indent, key, "Unknown");
 	}
 }
 
-void printExecutionCapabilities(size_t indent, const char* key, void* value, size_t size)
+void printExecutionCapabilities(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-    const cl_device_exec_capabilities props = *((cl_device_exec_capabilities*)value);
+	const cl_device_exec_capabilities props = *((cl_device_exec_capabilities*)value);
 	struct { cl_device_exec_capabilities flag; const char* name; } list[] = {
 		{ CL_EXEC_KERNEL, "OpenCL kernels" },
 		{ CL_EXEC_NATIVE_KERNEL, "Native kernels" }
@@ -303,143 +802,3 @@ void printExecutionCapabilities(size_t indent, const char* key, void* value, siz
 	}
 }
 
-
-int main (int argc, char* argv[])
-{
-    cl_int status;
-
-    cl_uint num_platforms;
-    status = clGetPlatformIDs(0, NULL, &num_platforms);
-    assert(status == CL_SUCCESS, "Cannot get the number of OpenCL platforms available.");
-
-    cl_platform_id platforms[num_platforms];
-    status = clGetPlatformIDs(num_platforms, platforms, NULL);
-    assert(status == CL_SUCCESS, "Cannot get the list of OpenCL platforms.");
-
-    size_t indent = 0;
-    printHeader(indent, "%d OpenCL platform%s found", num_platforms, num_platforms > 1 ? "s" : "");
-    ++indent;
-    for (size_t i = 0; i < num_platforms; ++i)
-    {
-        printHeader(indent, "Platform #%zu", i);
-        ++indent;
-
-        printPlatformInfo(platforms[i], CL_PLATFORM_NAME, "Name", indent, printString);
-        printPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, "Vendor", indent, printString);
-        printPlatformInfo(platforms[i], CL_PLATFORM_VERSION, "Version", indent, printString);
-        printPlatformInfo(platforms[i], CL_PLATFORM_PROFILE, "Profile", indent, printString);
-        printPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, "Extensions", indent, printExtensions);
-
-        putchar('\n');
-        
-        cl_uint num_devices;
-        status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
-        assert(status == CL_SUCCESS, "Cannot get the number of OpenCL devices available on this platform.");
-
-        cl_device_id devices[num_devices];
-        status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
-        assert(status == CL_SUCCESS, "Cannot get the list of OpenCL devices.");
-
-        printHeader(indent, "%d OpenCL device%s found", num_devices, num_devices > 1 ? "s" : "");
-        ++indent;
-        
-        for (size_t j = 0; j < num_devices; ++j)
-        {
-            printHeader(indent, "Device #%zu", j);
-            ++indent;
-
-            printDeviceInfo(devices[j], CL_DEVICE_NAME, "Name", indent, printString);
-            printDeviceInfo(devices[j], CL_DEVICE_TYPE, "Type", indent, printDeviceType);
-            printDeviceInfo(devices[j], CL_DEVICE_VENDOR, "Vendor", indent, printString);
-            printDeviceInfo(devices[j], CL_DEVICE_VENDOR_ID, "Vendor ID", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PROFILE, "Profile", indent, printString);
-            printDeviceInfo(devices[j], CL_DEVICE_AVAILABLE, "Available", indent, printBool);
-            printDeviceInfo(devices[j], CL_DEVICE_VERSION, "Version", indent, printString);
-            printDeviceInfo(devices[j], CL_DRIVER_VERSION, "Driver version", indent, printString);
-            
-            // Compiler
-            printDeviceInfo(devices[j], CL_DEVICE_COMPILER_AVAILABLE, "Compiler available", indent, printBool);
-            printDeviceInfo(devices[j], CL_DEVICE_OPENCL_C_VERSION, "OpenCL C version", indent, printString);
-            
-            // Misc
-            printDeviceInfo(devices[j], CL_DEVICE_ADDRESS_BITS, "Address space size", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_ENDIAN_LITTLE, "Little endian", indent, printBool);
-            printDeviceInfo(devices[j], CL_DEVICE_ERROR_CORRECTION_SUPPORT, "Error correction support", indent, printBool);
-            printDeviceInfo(devices[j], CL_DEVICE_HOST_UNIFIED_MEMORY, "Unified memory", indent, printBool);
-
-            printDeviceInfo(devices[j], CL_DEVICE_MEM_BASE_ADDR_ALIGN, "Address alignment (bits)", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, "Smallest alignment (bytes)", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PROFILING_TIMER_RESOLUTION, "Resolution of timer (ns)", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_CLOCK_FREQUENCY, "Max clock frequency (MHz)", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_COMPUTE_UNITS, "Max compute units", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_CONSTANT_ARGS, "Max constant args", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, "Max constant buffer size", indent, printMemSize);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_MEM_ALLOC_SIZE, "Max mem alloc size", indent, printMemSize);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_PARAMETER_SIZE, "Max parameter size", indent, printSize);
-			printDeviceInfo(devices[j], CL_DEVICE_QUEUE_PROPERTIES, "Command-queue supported props", indent, printQueueProperties);
-			printDeviceInfo(devices[j], CL_DEVICE_EXECUTION_CAPABILITIES, "Execution capabilities", indent, printExecutionCapabilities);
-            
-            // Memory
-            printDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_SIZE, "Global memory size", indent, printMemSize);
-            printDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, "Global memory cache size", indent, printMemSize);
-            printDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, "Global memory line cache size", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_LOCAL_MEM_SIZE, "Local memory size", indent, printMemSize);
-			printDeviceInfo(devices[j], CL_DEVICE_LOCAL_MEM_TYPE, "Local memory type", indent, printLocalMemType);
-			printDeviceInfo(devices[j], CL_DEVICE_GLOBAL_MEM_CACHE_TYPE, "Global memory cache type", indent, printGlobalMemCacheType);
-            
-            // Work group
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, "Max work group size", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, "Max work item dimensions", indent, printUint);
-			printDeviceInfo(devices[j], CL_DEVICE_MAX_WORK_ITEM_SIZES, "Max work item sizes", indent, printDimensions);
-            
-            // Images
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE_SUPPORT, "Image support", indent, printBool);
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE2D_MAX_HEIGHT, "Max 2D image height", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE2D_MAX_WIDTH, "Max 2D image width", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE3D_MAX_DEPTH, "Max 3D image depth", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE3D_MAX_HEIGHT, "Max 3D image height", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_IMAGE3D_MAX_WIDTH, "Max 3D image width", indent, printSize);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_READ_IMAGE_ARGS, "Max read image args", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_WRITE_IMAGE_ARGS, "Max write image args", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_MAX_SAMPLERS, "Max samplers", indent, printUint);
-            
-            // Vectors
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_CHAR, "Native vector width char", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT, "Native vector width short", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_INT, "Native vector width int", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_LONG, "Native vector width long", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF, "Native vector width half", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT, "Native vector width float", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE, "Native vector width double", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, "Preferred vector width char", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, "Preferred vector width short", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, "Preferred vector width int", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, "Preferred vector width long", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF, "Preferred vector width half", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, "Preferred vector width float", indent, printUint);
-            printDeviceInfo(devices[j], CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, "Preferred vector width double", indent, printUint);
-            
-			// Floating-points
-#ifdef CL_DEVICE_HALF_FP_CONFIG
-			printDeviceInfo(devices[j], CL_DEVICE_HALF_FP_CONFIG, "Half precision fp capability", indent, printFPConfig);
-#endif
-			printDeviceInfo(devices[j], CL_DEVICE_SINGLE_FP_CONFIG, "Single precision fp capability", indent, printFPConfig);
-			printDeviceInfo(devices[j], CL_DEVICE_DOUBLE_FP_CONFIG, "Double precision fp capability", indent, printFPConfig);
-			
-            // Extensions
-            printDeviceInfo(devices[j], CL_DEVICE_EXTENSIONS, "Extensions", indent, printExtensions);
-            
-            putchar('\n');
-            indent -= 2;
-        }
-        indent -= 2;
-    }
-
-    return EXIT_SUCCESS;
-}
-
-
-// TODO: Support OpenCL 1.1
-//
-// http://www.khronos.org/registry/cl/sdk/1.1/docs/man/xhtml/
-//
