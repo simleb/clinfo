@@ -131,13 +131,17 @@ DeviceParameter device_parameters[] = {
 
 	// Compiler
 	{ CL_DEVICE_COMPILER_AVAILABLE, "CL_DEVICE_COMPILER_AVAILABLE", "Compiler available", printBool, printBool, ADVANCED },
+#if __OPENCL_VERSION__ >= 110
 	{ CL_DEVICE_OPENCL_C_VERSION, "CL_DEVICE_OPENCL_C_VERSION", "OpenCL C version", printString, printString, ADVANCED },
+#endif
 
 	// Misc
 	{ CL_DEVICE_ADDRESS_BITS, "CL_DEVICE_ADDRESS_BITS", "Address space size", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_ENDIAN_LITTLE, "CL_DEVICE_ENDIAN_LITTLE", "Little endian", printBool, printBool, ADVANCED },
 	{ CL_DEVICE_ERROR_CORRECTION_SUPPORT, "CL_DEVICE_ERROR_CORRECTION_SUPPORT", "Error correction support", printBool, printBool, ADVANCED },
+#if __OPENCL_VERSION__ >= 110
 	{ CL_DEVICE_HOST_UNIFIED_MEMORY, "CL_DEVICE_HOST_UNIFIED_MEMORY", "Unified memory", printBool, printBool, ADVANCED },
+#endif
 	{ CL_DEVICE_MEM_BASE_ADDR_ALIGN, "CL_DEVICE_MEM_BASE_ADDR_ALIGN", "Address alignment (bits)", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, "CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE", "Smallest alignment (bytes)", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_PROFILING_TIMER_RESOLUTION, "CL_DEVICE_PROFILING_TIMER_RESOLUTION", "Resolution of timer (ns)", printSize, printSize, ADVANCED },
@@ -175,6 +179,7 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_MAX_SAMPLERS, "CL_DEVICE_MAX_SAMPLERS", "Max samplers", printUint, printUint, ADVANCED },
 
 	// Vectors
+#if __OPENCL_VERSION__ >= 110
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_CHAR, "CL_DEVICE_NATIVE_VECTOR_WIDTH_CHAR", "Native vector width char", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_SHORT", "Native vector width short", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_INT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_INT", "Native vector width int", printUint, printUint, ADVANCED },
@@ -182,11 +187,14 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF, "CL_DEVICE_NATIVE_VECTOR_WIDTH_HALF", "Native vector width half", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT, "CL_DEVICE_NATIVE_VECTOR_WIDTH_FLOAT", "Native vector width float", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE, "CL_DEVICE_NATIVE_VECTOR_WIDTH_DOUBLE", "Native vector width double", printUint, printUint, ADVANCED },
+#endif
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR", "Preferred vector width char", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT", "Preferred vector width short", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT", "Preferred vector width int", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG", "Preferred vector width long", printUint, printUint, ADVANCED },
+#if __OPENCL_VERSION__ >= 110
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_HALF", "Preferred vector width half", printUint, printUint, ADVANCED },
+#endif
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT", "Preferred vector width float", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, "CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE", "Preferred vector width double", printUint, printUint, ADVANCED },
 
@@ -195,7 +203,9 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_HALF_FP_CONFIG, "CL_DEVICE_HALF_FP_CONFIG", "Half precision fp capability", printFPConfig, printFPConfig, ADVANCED },
 #endif
 	{ CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG", "Single precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+#ifdef CL_DEVICE_DOUBLE_FP_CONFIG
 	{ CL_DEVICE_DOUBLE_FP_CONFIG, "CL_DEVICE_DOUBLE_FP_CONFIG", "Double precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+#endif
 
 	// Extensions
 	{ CL_DEVICE_EXTENSIONS, "CL_DEVICE_EXTENSIONS", "Extensions", printString, printExtensions, ADVANCED },
@@ -712,13 +722,15 @@ void printFPConfig(size_t indent, const char* key, void* value, size_t size, Pri
 {
 	const cl_device_fp_config config = *((cl_device_type*)value);
 	struct { cl_device_fp_config flag; const char* name; } list[] = {
+#if __OPENCL_VERSION__ >= 110
+		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" }
+#endif
 		{ CL_FP_DENORM, "Denorms" },
 		{ CL_FP_INF_NAN, "Inf and NaNs" },
 		{ CL_FP_ROUND_TO_NEAREST, "Round to nearest even rounding mode" },
 		{ CL_FP_ROUND_TO_ZERO, "Round to zero rounding mode" },
 		{ CL_FP_ROUND_TO_INF, "Round to +ve and -ve infinity rounding modes" },
-		{ CL_FP_FMA, "IEEE754-2008 fused multiply-add" },
-		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" }
+		{ CL_FP_FMA, "IEEE754-2008 fused multiply-add" }
 	};
 	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
