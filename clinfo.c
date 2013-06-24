@@ -117,7 +117,7 @@ void printPartitionType(size_t indent, const char* key, void* value, size_t size
 ▏ List of parameters                                                          ▕
 \*****************************************************************************/
 
-PlatformParameter platform_parameters[] = {
+const PlatformParameter platform_parameters[] = {
 	{ CL_PLATFORM_NAME, "CL_PLATFORM_NAME", "Name", printString, printString, BASIC },
 	{ CL_PLATFORM_VENDOR, "CL_PLATFORM_VENDOR", "Vendor", printString, printString, ADVANCED },
 	{ CL_PLATFORM_VERSION, "CL_PLATFORM_VERSION", "Version", printString, printString, BASIC },
@@ -125,7 +125,7 @@ PlatformParameter platform_parameters[] = {
 	{ CL_PLATFORM_EXTENSIONS, "CL_PLATFORM_EXTENSIONS", "Extensions", printString, printExtensions, ADVANCED }
 };
 
-DeviceParameter device_parameters[] = {
+const DeviceParameter device_parameters[] = {
 	// General
 	{ CL_DEVICE_NAME, "CL_DEVICE_NAME", "Name", printString, printString, BASIC },
 	{ CL_DEVICE_TYPE, "CL_DEVICE_TYPE", "Type", printDeviceType, printDeviceType, BASIC },
@@ -761,7 +761,7 @@ void printExtensions(size_t indent, const char* key, void* value, size_t size, P
 void printFPConfig(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
 	const cl_device_fp_config config = *((cl_device_type*)value);
-	struct { cl_device_fp_config flag; const char* name; } list[] = {
+	const struct { cl_device_fp_config flag; const char* name; } list[] = {
 #if __OPENCL_VERSION__ >= 110
 		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" },
 #endif
@@ -792,7 +792,7 @@ void printFPConfig(size_t indent, const char* key, void* value, size_t size, Pri
 void printQueueProperties(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
 	const cl_command_queue_properties props = *((cl_command_queue_properties*)value);
-	struct { cl_command_queue_properties flag; const char* name; } list[] = {
+	const struct { cl_command_queue_properties flag; const char* name; } list[] = {
 		{ CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, "Out of order execution" },
 		{ CL_QUEUE_PROFILING_ENABLE, "Profiling" }
 	};
@@ -851,7 +851,7 @@ void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t
 void printExecutionCapabilities(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
 	const cl_device_exec_capabilities props = *((cl_device_exec_capabilities*)value);
-	struct { cl_device_exec_capabilities flag; const char* name; } list[] = {
+	const struct { cl_device_exec_capabilities flag; const char* name; } list[] = {
 		{ CL_EXEC_KERNEL, "OpenCL kernels" },
 		{ CL_EXEC_NATIVE_KERNEL, "Native kernels" }
 	};
@@ -951,7 +951,7 @@ void printPartitionProperties(size_t indent, const char* key, void* value, size_
 void printPartitionAffinityDomain(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
 	const cl_device_affinity_domain props = *((cl_device_affinity_domain*)value);
-	struct { cl_device_affinity_domain flag; const char* name; } list[] = {
+	const struct { cl_device_affinity_domain flag; const char* name; } list[] = {
 		{ CL_DEVICE_AFFINITY_DOMAIN_NUMA, "NUMA" },
 		{ CL_DEVICE_AFFINITY_DOMAIN_L4_CACHE, "L4 cache" },
 		{ CL_DEVICE_AFFINITY_DOMAIN_L3_CACHE, "L3 cache" },
@@ -1000,7 +1000,7 @@ void printPartitionType(size_t indent, const char* key, void* value, size_t size
 	  case CL_DEVICE_PARTITION_BY_AFFINITY_DOMAIN:
 		{
 			const cl_device_affinity_domain dom = (cl_device_affinity_domain)props[1];
-			struct { cl_device_affinity_domain flag; const char* name; } list[] = {
+			const struct { cl_device_affinity_domain flag; const char* name; } list[] = {
 				{ CL_DEVICE_AFFINITY_DOMAIN_NUMA, "NUMA" },
 				{ CL_DEVICE_AFFINITY_DOMAIN_L4_CACHE, "L4 cache" },
 				{ CL_DEVICE_AFFINITY_DOMAIN_L3_CACHE, "L3 cache" },
