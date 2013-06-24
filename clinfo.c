@@ -104,6 +104,13 @@ void printBool(size_t indent, const char* key, void* value, size_t size, Printer
 void printDeviceType(size_t indent, const char* key, void* value, size_t size, Printer print);
 void printStringValue(size_t indent, const char* key, void* value, size_t size, Printer print);
 void printString(size_t indent, const char* key, void* value, size_t size, Printer print);
+#if __OPENCL_VERSION__ >= 120
+void printKernels(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printParentDevice(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printPartitionProperties(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printPartitionAffinityDomain(size_t indent, const char* key, void* value, size_t size, Printer print);
+void printPartitionType(size_t indent, const char* key, void* value, size_t size, Printer print);
+#endif
 
 
 /*****************************************************************************\
@@ -128,9 +135,16 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_AVAILABLE, "CL_DEVICE_AVAILABLE", "Available", printBool, printBool, ADVANCED },
 	{ CL_DEVICE_VERSION, "CL_DEVICE_VERSION", "Version", printString, printString, BASIC },
 	{ CL_DRIVER_VERSION, "CL_DRIVER_VERSION", "Driver version", printString, printString, ADVANCED },
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_PARENT_DEVICE, "CL_DEVICE_PARENT_DEVICE", "Parent device", printParentDevice, printParentDevice, ADVANCED },
+	{ CL_DEVICE_REFERENCE_COUNT, "CL_DEVICE_REFERENCE_COUNT", "Reference count", printUint, printUint, ADVANCED },
+#endif
 
 	// Compiler
 	{ CL_DEVICE_COMPILER_AVAILABLE, "CL_DEVICE_COMPILER_AVAILABLE", "Compiler available", printBool, printBool, ADVANCED },
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_LINKER_AVAILABLE, "CL_DEVICE_LINKER_AVAILABLE", "Linker available", printBool, printBool, ADVANCED },
+#endif
 #if __OPENCL_VERSION__ >= 110
 	{ CL_DEVICE_OPENCL_C_VERSION, "CL_DEVICE_OPENCL_C_VERSION", "OpenCL C version", printString, printString, ADVANCED },
 #endif
@@ -155,6 +169,10 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_MAX_PARAMETER_SIZE, "CL_DEVICE_MAX_PARAMETER_SIZE", "Max parameter size", printSize, printSize, ADVANCED },
 	{ CL_DEVICE_QUEUE_PROPERTIES, "CL_DEVICE_QUEUE_PROPERTIES", "Command-queue supported props", printQueueProperties, printQueueProperties, ADVANCED },
 	{ CL_DEVICE_EXECUTION_CAPABILITIES, "CL_DEVICE_EXECUTION_CAPABILITIES", "Execution capabilities", printExecutionCapabilities, printExecutionCapabilities, ADVANCED },
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_PREFERRED_INTEROP_USER_SYNC, "CL_DEVICE_PREFERRED_INTEROP_USER_SYNC", "User synchronization preferred", printBool, printBool, ADVANCED },
+	{ CL_DEVICE_PRINTF_BUFFER_SIZE, "CL_DEVICE_PRINTF_BUFFER_SIZE", "Printf buffer size", printSize, printMemSize, ADVANCED },
+#endif
 
 	// Memory
 	{ CL_DEVICE_GLOBAL_MEM_SIZE, "CL_DEVICE_GLOBAL_MEM_SIZE", "Global memory size", printUlong, printMemSize, BASIC },
@@ -179,6 +197,10 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_MAX_READ_IMAGE_ARGS, "CL_DEVICE_MAX_READ_IMAGE_ARGS", "Max read image args", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_MAX_WRITE_IMAGE_ARGS, "CL_DEVICE_MAX_WRITE_IMAGE_ARGS", "Max write image args", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_MAX_SAMPLERS, "CL_DEVICE_MAX_SAMPLERS", "Max samplers", printUint, printUint, ADVANCED },
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_IMAGE_MAX_BUFFER_SIZE, "CL_DEVICE_IMAGE_MAX_BUFFER_SIZE", "Max pixels for 1D image from buffer", printSize, printSize, ADVANCED },
+	{ CL_DEVICE_IMAGE_MAX_ARRAY_SIZE, "CL_DEVICE_IMAGE_MAX_ARRAY_SIZE", "Max images in 1D/2D image array", printSize, printSize, ADVANCED },
+#endif
 
 	// Vectors
 #if __OPENCL_VERSION__ >= 110
@@ -207,6 +229,19 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG", "Single precision float capability", printFPConfig, printFPConfig, ADVANCED },
 #ifdef CL_DEVICE_DOUBLE_FP_CONFIG
 	{ CL_DEVICE_DOUBLE_FP_CONFIG, "CL_DEVICE_DOUBLE_FP_CONFIG", "Double precision float capability", printFPConfig, printFPConfig, ADVANCED },
+#endif
+
+	// Partitioning
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_PARTITION_MAX_SUB_DEVICES, "CL_DEVICE_PARTITION_MAX_SUB_DEVICES", "Max number of sub-devices", printUint, printUint, ADVANCED },
+	{ CL_DEVICE_PARTITION_PROPERTIES, "CL_DEVICE_PARTITION_PROPERTIES", "Partition types supported", printPartitionProperties, printPartitionProperties, ADVANCED },
+	{ CL_DEVICE_PARTITION_AFFINITY_DOMAIN, "CL_DEVICE_PARTITION_AFFINITY_DOMAIN", "Affinity domains supported", printPartitionAffinityDomain, printPartitionAffinityDomain, ADVANCED },
+	{ CL_DEVICE_PARTITION_TYPE, "CL_DEVICE_PARTITION_TYPE", "Partition type", printPartitionType, printPartitionType, ADVANCED },
+#endif
+
+	// Built-in kernels
+#if __OPENCL_VERSION__ >= 120
+	{ CL_DEVICE_BUILT_IN_KERNELS, "CL_DEVICE_BUILT_IN_KERNELS", "Built-in kernels", printString, printKernels, ADVANCED },
 #endif
 
 	// Extensions
@@ -834,3 +869,163 @@ void printExecutionCapabilities(size_t indent, const char* key, void* value, siz
 	}
 }
 
+#if __OPENCL_VERSION__ >= 120
+
+void printKernels(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	if (size > 0 && *((char*)value) != '\0')
+	{
+		char* item = strtok(value, ";");
+		print(indent, key, item);
+		while ((item = strtok(NULL, ";")))
+		{
+			print(indent, NULL, item);
+		}
+	}
+	else
+	{
+		print(indent, key, "None");
+	}
+}
+
+void printParentDevice(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	const cl_device_id id = size > 0 ? *((cl_device_id*)value) : NULL;
+	if (id)
+	{
+		cl_platform_id platform;
+		clGetDeviceInfo(id, CL_DEVICE_PLATFORM, sizeof(cl_platform_id), &platform, NULL);
+
+		cl_uint num_devices;
+		clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+
+		cl_device_id devices[num_devices];
+		clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
+
+		for (size_t i = 0; i < num_devices; ++i)
+		{
+			if (devices[i] == id)
+			{
+				char buffer[(i > 0 ? lrint(log10(i)) + 1 : 1) + 2];
+				sprintf(buffer, "#%zu", i);
+				print(indent, key, buffer);
+				return;
+			}
+		}
+		print(indent, key, "Not found");
+	}
+	else
+	{
+		print(indent, key, "None");
+	}
+}
+
+void printPartitionProperties(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	const size_t ndims = size / sizeof(cl_device_partition_property);
+	const cl_device_partition_property *props = *((cl_device_partition_property(*)[])value);
+	for (size_t i = 0; i < ndims && props[i]; ++i)
+	{
+		switch (props[i])
+		{
+		  case CL_DEVICE_PARTITION_EQUALLY:
+			print(indent, key, "Equally");
+			break;
+		  case CL_DEVICE_PARTITION_BY_COUNTS:
+			print(indent, key, "By counts");
+			break;
+		  case CL_DEVICE_PARTITION_BY_AFFINITY_DOMAIN:
+			print(indent, key, "By affinity domain");
+			break;
+		  default:
+			print(indent, key, "Unknown partition property");
+		}
+		key = NULL;
+	}
+	if (key)
+	{
+		print(indent, key, "None");
+	}
+}
+
+void printPartitionAffinityDomain(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	const cl_device_affinity_domain props = *((cl_device_affinity_domain*)value);
+	struct { cl_device_affinity_domain flag; const char* name; } list[] = {
+		{ CL_DEVICE_AFFINITY_DOMAIN_NUMA, "NUMA" },
+		{ CL_DEVICE_AFFINITY_DOMAIN_L4_CACHE, "L4 cache" },
+		{ CL_DEVICE_AFFINITY_DOMAIN_L3_CACHE, "L3 cache" },
+		{ CL_DEVICE_AFFINITY_DOMAIN_L2_CACHE, "L2 cache" },
+		{ CL_DEVICE_AFFINITY_DOMAIN_L1_CACHE, "L1 cache" },
+		{ CL_DEVICE_AFFINITY_DOMAIN_NEXT_PARTITIONABLE, "Next partitionable" }
+	};
+	for (size_t i = 0; i < LENGTH(list); ++i)
+	{
+		if (props & list[i].flag)
+		{
+			print(indent, key, list[i].name);
+			key = NULL;
+		}
+	}
+	if (key)
+	{
+		print(indent, key, "None");
+	}
+}
+
+void printPartitionType(size_t indent, const char* key, void* value, size_t size, Printer print)
+{
+	const size_t ndims = size / sizeof(cl_device_partition_property);
+	const cl_device_partition_property *props = *((cl_device_partition_property(*)[])value);
+	switch (props[0])
+	{
+	  case CL_DEVICE_PARTITION_EQUALLY:
+		{
+			const cl_uint num = (cl_uint)props[1];
+			char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 11];
+			sprintf(buffer, "Equally (%u)", num);
+			print(indent, key, buffer);
+		}
+		break;
+	  case CL_DEVICE_PARTITION_BY_COUNTS:
+		print(indent, key, "By counts");
+		for (size_t i = 1; i < ndims - 1; ++i)
+		{
+			const cl_uint num = (cl_uint)props[i];
+			char buffer[(num > 0 ? lrint(log10(num)) + 1 : 1) + 1];
+			sprintf(buffer, "%u", num);
+			print(indent, NULL, buffer);
+		}
+		break;
+	  case CL_DEVICE_PARTITION_BY_AFFINITY_DOMAIN:
+		{
+			const cl_device_affinity_domain dom = (cl_device_affinity_domain)props[1];
+			struct { cl_device_affinity_domain flag; const char* name; } list[] = {
+				{ CL_DEVICE_AFFINITY_DOMAIN_NUMA, "NUMA" },
+				{ CL_DEVICE_AFFINITY_DOMAIN_L4_CACHE, "L4 cache" },
+				{ CL_DEVICE_AFFINITY_DOMAIN_L3_CACHE, "L3 cache" },
+				{ CL_DEVICE_AFFINITY_DOMAIN_L2_CACHE, "L2 cache" },
+				{ CL_DEVICE_AFFINITY_DOMAIN_L1_CACHE, "L1 cache" },
+				{ CL_DEVICE_AFFINITY_DOMAIN_NEXT_PARTITIONABLE, "Next partitionable" }
+			};
+			char buffer[40] = "By affinity domain (Unknown)";
+			for (size_t i = 0; i < LENGTH(list); ++i)
+			{
+				if (dom == list[i].flag)
+				{
+					sprintf(buffer, "By affinity domain (%s)", list[i].name);
+					break;
+				}
+			}
+			print(indent, key, buffer);
+		}
+		break;
+	  case 0:
+		print(indent, key, "Not a subdevice");
+		break;
+	  default:
+		print(indent, key, "Unknown partition property");
+	}
+}
+
+#endif
