@@ -143,7 +143,9 @@ DeviceParameter device_parameters[] = {
 	{ CL_DEVICE_HOST_UNIFIED_MEMORY, "CL_DEVICE_HOST_UNIFIED_MEMORY", "Unified memory", printBool, printBool, ADVANCED },
 #endif
 	{ CL_DEVICE_MEM_BASE_ADDR_ALIGN, "CL_DEVICE_MEM_BASE_ADDR_ALIGN", "Address alignment (bits)", printUint, printUint, ADVANCED },
+#if __OPENCL_VERSION__ < 120
 	{ CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, "CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE", "Smallest alignment (bytes)", printUint, printUint, ADVANCED },
+#endif
 	{ CL_DEVICE_PROFILING_TIMER_RESOLUTION, "CL_DEVICE_PROFILING_TIMER_RESOLUTION", "Resolution of timer (ns)", printSize, printSize, ADVANCED },
 	{ CL_DEVICE_MAX_CLOCK_FREQUENCY, "CL_DEVICE_MAX_CLOCK_FREQUENCY", "Max clock frequency (MHz)", printUint, printUint, ADVANCED },
 	{ CL_DEVICE_MAX_COMPUTE_UNITS, "CL_DEVICE_MAX_COMPUTE_UNITS", "Max compute units", printUint, printUint, ADVANCED },
@@ -606,12 +608,15 @@ void printDeviceType(size_t indent, const char* key, void* value, size_t size, P
 {
 	const cl_device_type type = *((cl_device_type*)value);
 	struct { cl_device_type type; const char* name; } list[] = {
-		{ CL_DEVICE_TYPE_CPU, "CPU"},
-		{ CL_DEVICE_TYPE_GPU, "GPU"},
-		{ CL_DEVICE_TYPE_ACCELERATOR, "Accelerator"},
-		{ CL_DEVICE_TYPE_DEFAULT, "Default"}
+		{ CL_DEVICE_TYPE_CPU, "CPU" },
+		{ CL_DEVICE_TYPE_GPU, "GPU" },
+		{ CL_DEVICE_TYPE_ACCELERATOR, "Accelerator" },
+#if __OPENCL_VERSION__ >= 120
+		{ CL_DEVICE_TYPE_CUSTOM, "Custom" },
+#endif
+		{ CL_DEVICE_TYPE_DEFAULT, "Default" }
 	};
-	char buffer[32], *p = buffer;
+	char buffer[45], *p = buffer;
 	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
 		if (type & list[i].type)
@@ -723,7 +728,10 @@ void printFPConfig(size_t indent, const char* key, void* value, size_t size, Pri
 	const cl_device_fp_config config = *((cl_device_type*)value);
 	struct { cl_device_fp_config flag; const char* name; } list[] = {
 #if __OPENCL_VERSION__ >= 110
-		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" }
+		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" },
+#endif
+#if __OPENCL_VERSION__ >= 120
+		{ CL_FP_CORRECTLY_ROUNDED_DIVIDE_SQRT, "Divide and sqrt are correctly rounded" },
 #endif
 		{ CL_FP_DENORM, "Denorms" },
 		{ CL_FP_INF_NAN, "Inf and NaNs" },
@@ -769,26 +777,38 @@ void printQueueProperties(size_t indent, const char* key, void* value, size_t si
 
 void printLocalMemType(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
-	if (*((cl_device_local_mem_type*)value) == CL_LOCAL)
+	switch (*((cl_device_local_mem_type*)value))
+	{
+#if __OPENCL_VERSION__ >= 120
+	  case CL_NONE:
+		print(indent, key, "None");
+		break;
+#endif
+	  case CL_LOCAL:
 		print(indent, key, "Local");
-	else
+		break;
+	  case CL_GLOBAL:
 		print(indent, key, "Global");
+		break;
+	  default:
+		print(indent, key, "Unknown");
+	}
 }
 
 void printGlobalMemCacheType(size_t indent, const char* key, void* value, size_t size, Printer print)
 {
 	switch (*((cl_device_mem_cache_type*)value))
 	{
-	case CL_NONE:
+	  case CL_NONE:
 		print(indent, key, "None");
 		break;
-	case CL_READ_ONLY_CACHE:
+	  case CL_READ_ONLY_CACHE:
 		print(indent, key, "Read only");
 		break;
-	case CL_READ_WRITE_CACHE:
+	  case CL_READ_WRITE_CACHE:
 		print(indent, key, "Read write");
 		break;
-	default:
+	  default:
 		print(indent, key, "Unknown");
 	}
 }
