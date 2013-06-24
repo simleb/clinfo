@@ -200,11 +200,11 @@ DeviceParameter device_parameters[] = {
 
 	// Floating-points
 #ifdef CL_DEVICE_HALF_FP_CONFIG
-	{ CL_DEVICE_HALF_FP_CONFIG, "CL_DEVICE_HALF_FP_CONFIG", "Half precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+	{ CL_DEVICE_HALF_FP_CONFIG, "CL_DEVICE_HALF_FP_CONFIG", "Half precision float capability", printFPConfig, printFPConfig, ADVANCED },
 #endif
-	{ CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG", "Single precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+	{ CL_DEVICE_SINGLE_FP_CONFIG, "CL_DEVICE_SINGLE_FP_CONFIG", "Single precision float capability", printFPConfig, printFPConfig, ADVANCED },
 #ifdef CL_DEVICE_DOUBLE_FP_CONFIG
-	{ CL_DEVICE_DOUBLE_FP_CONFIG, "CL_DEVICE_DOUBLE_FP_CONFIG", "Double precision fp capability", printFPConfig, printFPConfig, ADVANCED },
+	{ CL_DEVICE_DOUBLE_FP_CONFIG, "CL_DEVICE_DOUBLE_FP_CONFIG", "Double precision float capability", printFPConfig, printFPConfig, ADVANCED },
 #endif
 
 	// Extensions
