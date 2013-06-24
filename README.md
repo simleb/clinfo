@@ -1,6 +1,6 @@
 # clinfo
 
-_query OpenCL parameters_
+_query OpenCL platform and device parameters_
 
 
 ## Build
@@ -28,7 +28,7 @@ home directory (`$(HOME)/bin`), you can do:
 
 Just type: `clinfo`
 
-`clinfo` displays the OpenCL 1.1 parameters in a human readable form.
+`clinfo` displays the OpenCL platform and device parameters in a human readable form.
 
 By default, clinfo only displays a few basic parameters.
 You can print them all with `-a` (or `--all`).
