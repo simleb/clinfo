@@ -262,6 +262,9 @@ void printHelp(const char* argv0)
     printf("  -h --help   Display this help notice.\n");
     printf("  -l --list   List platforms and devices.\n");
     printf("  -r --raw    Raw output (by default the values are pretty-printed).\n");
+	printf("\n");
+	printf("Further help:\n");
+	printf("  man %s\n", argv0);
 }
 
 void parseOptions(int argc, char* argv[], Level* level, Style* style, long* platform, long* device, int* list, ParameterList** queries)
