@@ -602,7 +602,7 @@ void printDeviceType(size_t indent, const char* key, void* value, size_t size, P
 		{ CL_DEVICE_TYPE_DEFAULT, "Default"}
 	};
 	char buffer[32], *p = buffer;
-	for (size_t i = 0; i < sizeof list / sizeof(list[0]); ++i)
+	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
 		if (type & list[i].type)
 		{
@@ -720,7 +720,7 @@ void printFPConfig(size_t indent, const char* key, void* value, size_t size, Pri
 		{ CL_FP_FMA, "IEEE754-2008 fused multiply-add" },
 		{ CL_FP_SOFT_FLOAT, "Basic floating-point operations implemented in software" }
 	};
-	for (size_t i = 0; i < sizeof list / sizeof(list[0]); ++i)
+	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
 		if (config & list[i].flag)
 		{
@@ -741,7 +741,7 @@ void printQueueProperties(size_t indent, const char* key, void* value, size_t si
 		{ CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, "Out of order execution" },
 		{ CL_QUEUE_PROFILING_ENABLE, "Profiling" }
 	};
-	for (size_t i = 0; i < sizeof list / sizeof(list[0]); ++i)
+	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
 		if (props & list[i].flag)
 		{
@@ -788,7 +788,7 @@ void printExecutionCapabilities(size_t indent, const char* key, void* value, siz
 		{ CL_EXEC_KERNEL, "OpenCL kernels" },
 		{ CL_EXEC_NATIVE_KERNEL, "Native kernels" }
 	};
-	for (size_t i = 0; i < sizeof list / sizeof(list[0]); ++i)
+	for (size_t i = 0; i < LENGTH(list); ++i)
 	{
 		if (props & list[i].flag)
 		{
