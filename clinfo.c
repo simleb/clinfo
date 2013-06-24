@@ -356,7 +356,7 @@ void printPlatformInfo(const char* argv0, cl_platform_id platform, cl_platform_i
 	cl_int status = clGetPlatformInfo(platform, param, 0, NULL, &buffer_size);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the size of the '%s' platform parameter.", name, argv0);
+		fprintf(stderr, "%s: Cannot get the size of the '%s' platform parameter.\n", argv0, name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -364,7 +364,7 @@ void printPlatformInfo(const char* argv0, cl_platform_id platform, cl_platform_i
 	status = clGetPlatformInfo(platform, param, buffer_size, buffer, NULL);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the '%s' platform parameter.", name, argv0);
+		fprintf(stderr, "%s: Cannot get the '%s' platform parameter.\n", argv0, name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -379,7 +379,7 @@ void printDeviceInfo(const char* argv0, cl_device_id device, cl_device_info para
 	cl_int status = clGetDeviceInfo(device, param, 0, NULL, &buffer_size);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the size of the '%s' device parameter.", name, argv0);
+		fprintf(stderr, "%s: Cannot get the size of the '%s' device parameter.\n", argv0, name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -387,7 +387,7 @@ void printDeviceInfo(const char* argv0, cl_device_id device, cl_device_info para
 	status = clGetDeviceInfo(device, param, buffer_size, buffer, NULL);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the '%s' device parameter.", name, argv0);
+		fprintf(stderr, "%s: Cannot get the '%s' device parameter.\n", argv0, name);
 		exit(EXIT_FAILURE);
 	}
 
@@ -418,7 +418,7 @@ int main (int argc, char* argv[])
 	status = clGetPlatformIDs(0, NULL, &num_platforms);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the number of OpenCL platforms available.", argv[0]);
+		fprintf(stderr, "%s: Cannot get the number of OpenCL platforms available.\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -432,7 +432,7 @@ int main (int argc, char* argv[])
 	status = clGetPlatformIDs(num_platforms, platforms, NULL);
 	if (status != CL_SUCCESS)
 	{
-		fprintf(stderr, "%s: Cannot get the list of OpenCL platforms.", argv[0]);
+		fprintf(stderr, "%s: Cannot get the list of OpenCL platforms.\n", argv[0]);
 		exit(EXIT_FAILURE);
 	}
 
@@ -488,7 +488,7 @@ int main (int argc, char* argv[])
 		status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
 		if (status != CL_SUCCESS)
 		{
-			fprintf(stderr, "%s: Cannot get the number of OpenCL devices available on this platform.", argv[0]);
+			fprintf(stderr, "%s: Cannot get the number of OpenCL devices available on this platform.\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
 
@@ -502,7 +502,7 @@ int main (int argc, char* argv[])
 		status = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, num_devices, devices, NULL);
 		if (status != CL_SUCCESS)
 		{
-			fprintf(stderr, "%s: Cannot get the list of OpenCL devices.", argv[0]);
+			fprintf(stderr, "%s: Cannot get the list of OpenCL devices.\n", argv[0]);
 			exit(EXIT_FAILURE);
 		}
 
