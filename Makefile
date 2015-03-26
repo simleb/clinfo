@@ -15,13 +15,13 @@
 
 EXEC = clinfo
 
-CFLAGS = -Wall -O3
+CFLAGS = -Wall -O3 -std=c99
 LDFLAGS =
 
 ifeq ($(shell uname),Darwin)
 	LDFLAGS += -framework OpenCL
 else
-	LDFLAGS += -lopencl
+	LDFLAGS += -lOpenCL -lm
 endif
 
 prefix = /usr/local
