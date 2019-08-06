@@ -727,7 +727,7 @@ void printDimensions(size_t indent, const char* key, void* value, size_t size, P
 {
 	const size_t ndims = size / sizeof(size_t);
 	const size_t *dims = *((size_t(*)[])value);
-	size_t buffer_size = 1;
+	size_t buffer_size = 2;
 	for (size_t i = 0; i < ndims; ++i)
 	{
 		buffer_size += (dims[i] > 0 ? lrint(log10(dims[i])) + 1 : 1) + 2;
