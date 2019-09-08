@@ -730,7 +730,7 @@ void printDimensions(size_t indent, const char* key, void* value, size_t size, P
 	size_t buffer_size = 2;
 	for (size_t i = 0; i < ndims; ++i)
 	{
-		buffer_size += (dims[i] > 0 ? lrint(log10(dims[i])) + 1 : 1) + 2;
+		buffer_size += lrint(log10(dims[i]) + 1) + 2;
 	}
 	char buffer[buffer_size], *p = buffer;
 	*p++ = '(';
